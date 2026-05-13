@@ -48,22 +48,41 @@ function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 
 function openConfig() {
   const current = getToken();
-  const msg = current
-    ? `Aktuální token: ${current.slice(0, 8)}…\n\nVložte nový token, prázdné pole = vymazat:`
-    : 'Vložte GitHub Personal Access Token (fine-grained, repo rugby-roster-data, Contents read/write):';
-  const v = prompt(msg, '');
-  if (v === null) return;
-  const trimmed = v.trim();
-  if (!trimmed) {
-    if (current && confirm('Vymazat současný token z prohlížeče?')) {
+  if (current) {
+    if (confirm('Odhlásit se z databáze soupisek? Token bude odstraněn z tohoto prohlížeče. Pro další přihlášení ho budeš muset znovu vložit.')) {
+      clearTimeout(saveTimer);
       clearToken();
-      setSyncStatus('Token vymazán', 'error');
+      players = [];
+      activeRoster = null;
+      rosters = [];
+      updateAuthButton();
+      setSyncStatus('Odhlášen', '');
       setControlsEnabled(false);
+      rosterSelect.innerHTML = '<option value="">(odhlášen)</option>';
+      render();
     }
     return;
   }
+  const v = prompt(
+    'Přihlášení k databázi soupisek.\n\nVlož svůj přístupový token (Personal Access Token, začíná „github_pat_…"):',
+    ''
+  );
+  if (v === null) return;
+  const trimmed = v.trim();
+  if (!trimmed) return;
   setToken(trimmed);
+  updateAuthButton();
   init();
+}
+
+function updateAuthButton() {
+  if (getToken()) {
+    configBtn.textContent = 'Odhlásit se';
+    configBtn.title = 'Odstranit token z prohlížeče a odhlásit se';
+  } else {
+    configBtn.textContent = 'Přihlásit se';
+    configBtn.title = 'Přihlásit se přístupovým tokenem k databázi soupisek';
+  }
 }
 
 // ===== GitHub API =====
@@ -307,7 +326,7 @@ function handleApiError(err, prefix) {
     return;
   }
   if (err.status === 401 || err.status === 403) {
-    setSyncStatus('Token neplatný (klikni Nastavení)', 'error');
+    setSyncStatus('Token neplatný – přihlas se znovu', 'error');
     return;
   }
   if (err.status === 404) {
@@ -332,10 +351,11 @@ function setControlsEnabled(enabled) {
 
 // ===== Init =====
 async function init() {
+  updateAuthButton();
   if (!getToken()) {
-    setSyncStatus('Token nenastaven – klikni "Nastavení"', 'error');
+    setSyncStatus('Odhlášen – klikni "Přihlásit se"', 'error');
     setControlsEnabled(false);
-    rosterSelect.innerHTML = '<option value="">(offline)</option>';
+    rosterSelect.innerHTML = '<option value="">(odhlášen)</option>';
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       players = raw ? JSON.parse(raw) : [];
