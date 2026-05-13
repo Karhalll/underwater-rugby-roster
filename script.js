@@ -5,7 +5,7 @@ const ROSTERS_PATH = 'rosters';
 const STORAGE_KEY = 'urugby_roster_v1';
 const TOKEN_KEY = 'urugby_gh_token';
 const ACTIVE_ROSTER_KEY = 'urugby_active_roster';
-const POLL_INTERVAL_MS = 10000;
+const POLL_INTERVAL_MS = 3000;
 
 // ===== State =====
 let players = [];
@@ -385,40 +385,69 @@ async function pollForChanges() {
   if (!getToken() || !activeRoster) return;
   if (saveTimer) return; // a local save is queued — let it finish first
   if (isUserBusy()) return;
+
+  const headers = {
+    'Authorization': `Bearer ${getToken()}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  // Conditional request: 304 responses don't count against the rate limit.
+  if (activeRoster.etag) headers['If-None-Match'] = activeRoster.etag;
+
+  let res;
   try {
-    const fresh = await readRosterFile(activeRoster.filename);
-    if (fresh.sha === activeRoster.sha) return;
-    players = fresh.players;
-    activeRoster.sha = fresh.sha;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
-    render();
-    showToast('Soupiska byla aktualizována ze serveru.');
+    res = await fetch(
+      `https://api.github.com/repos/${DATA_OWNER}/${DATA_REPO}/contents/${ROSTERS_PATH}/${encodeURIComponent(activeRoster.filename)}`,
+      { headers, cache: 'no-store' }
+    );
   } catch (err) {
-    if (err.status === 404) {
-      showToast('Tato soupiska byla na serveru smazána. Načítám seznam…', 'warn');
-      stopPolling();
-      try { rosters = await listRosters(); } catch {}
-      if (rosters.length > 0) {
-        activeRoster = rosters[0];
-        populateRosterSelect();
-        await switchRoster(rosters[0].filename);
-        startPolling();
-      } else {
-        activeRoster = null;
-        populateRosterSelect();
-        players = [];
-        render();
-      }
-      return;
-    }
-    if (err.status === 401 || err.status === 403) {
-      stopPolling();
-      handleApiError(err, 'Poll selhal');
-      return;
-    }
-    // Network blip — keep polling, don't disturb user.
-    console.warn('Poll failed:', err);
+    console.warn('Poll network error:', err);
+    return;
   }
+
+  if (res.status === 304) return; // unchanged, free
+
+  if (res.status === 404) {
+    showToast('Tato soupiska byla na serveru smazána. Načítám seznam…', 'warn');
+    stopPolling();
+    try { rosters = await listRosters(); } catch {}
+    if (rosters.length > 0) {
+      activeRoster = rosters[0];
+      populateRosterSelect();
+      await switchRoster(rosters[0].filename);
+      startPolling();
+    } else {
+      activeRoster = null;
+      populateRosterSelect();
+      players = [];
+      render();
+    }
+    return;
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    stopPolling();
+    setSyncStatus('Token neplatný – přihlas se znovu', 'error');
+    return;
+  }
+
+  if (!res.ok) {
+    console.warn('Poll failed with status', res.status);
+    return;
+  }
+
+  // 200 OK — content changed
+  activeRoster.etag = res.headers.get('etag') || activeRoster.etag;
+  const item = await res.json();
+  if (item.sha === activeRoster.sha) return;
+  const text = b64ToUtf8(item.content || '');
+  const newPlayers = text.trim() ? JSON.parse(text) : [];
+  if (!Array.isArray(newPlayers)) return;
+  players = newPlayers;
+  activeRoster.sha = item.sha;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+  render();
+  showToast('Soupiska byla aktualizována ze serveru.');
 }
 
 // ===== Init =====
