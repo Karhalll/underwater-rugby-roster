@@ -1,8 +1,18 @@
+// ===== Configuration =====
+const DATA_OWNER = 'Karhalll';
+const DATA_REPO = 'rugby-roster-data';
+const ROSTERS_PATH = 'rosters';
 const STORAGE_KEY = 'urugby_roster_v1';
+const TOKEN_KEY = 'urugby_gh_token';
+const ACTIVE_ROSTER_KEY = 'urugby_active_roster';
 
-// Player: { id, name, team: 'A'|'B'|'UNASSIGNED'|'UNDECIDED', role: 'Goalkeeper'|'Defender'|'Attacker'|'None' }
-let players = loadFromLocalStorage();
+// ===== State =====
+let players = [];
+let activeRoster = null; // { name, filename, sha }
+let rosters = [];        // [{ name, filename, sha }]
+let saveTimer = null;
 
+// ===== DOM =====
 const nameInput = document.getElementById('newPlayerName');
 const addBtn = document.getElementById('addPlayerBtn');
 const clearBtn = document.getElementById('clearAllBtn');
@@ -10,37 +20,352 @@ const resetBtn = document.getElementById('resetBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const loadBtn = document.getElementById('loadBtn');
 const loadFileInput = document.getElementById('loadFileInput');
+const rosterSelect = document.getElementById('rosterSelect');
+const newRosterBtn = document.getElementById('newRosterBtn');
+const renameRosterBtn = document.getElementById('renameRosterBtn');
+const deleteRosterBtn = document.getElementById('deleteRosterBtn');
+const syncStatus = document.getElementById('syncStatus');
+const configBtn = document.getElementById('configBtn');
 
+// ===== Event wiring =====
 addBtn.addEventListener('click', addPlayerFromInput);
-nameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') addPlayerFromInput();
-});
-clearBtn.addEventListener('click', () => {
-  if (!confirm('Opravdu chcete trvale smazat VŠECHNY hráče? Tato akce je nevratná.')) return;
-  players = [];
-  persist();
-  render();
-});
-resetBtn.addEventListener('click', () => {
-  const affected = players.filter((p) => p.team === 'A' || p.team === 'B').length;
-  if (affected === 0) {
-    alert('V týmech A a B nejsou žádní hráči k resetu.');
-    return;
-  }
-  if (!confirm(`Resetovat soupisku? ${affected} hráč(ů) z týmů A a B se přesune do Nepřiřazení. Nerozhodnutí zůstanou. Pokračovat?`)) return;
-  for (const p of players) {
-    if (p.team === 'A' || p.team === 'B') {
-      p.team = 'UNASSIGNED';
-      p.role = 'None';
-    }
-  }
-  persist();
-  render();
-});
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addPlayerFromInput(); });
+clearBtn.addEventListener('click', clearAll);
+resetBtn.addEventListener('click', resetRoster);
 downloadBtn.addEventListener('click', downloadJSON);
 loadBtn.addEventListener('click', () => loadFileInput.click());
 loadFileInput.addEventListener('change', handleFileLoad);
+rosterSelect.addEventListener('change', (e) => switchRoster(e.target.value));
+newRosterBtn.addEventListener('click', createNewRoster);
+renameRosterBtn.addEventListener('click', renameCurrentRoster);
+deleteRosterBtn.addEventListener('click', deleteCurrentRoster);
+configBtn.addEventListener('click', openConfig);
 
+// ===== Token / Config =====
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+function openConfig() {
+  const current = getToken();
+  const msg = current
+    ? `Aktuální token: ${current.slice(0, 8)}…\n\nVložte nový token, prázdné pole = vymazat:`
+    : 'Vložte GitHub Personal Access Token (fine-grained, repo rugby-roster-data, Contents read/write):';
+  const v = prompt(msg, '');
+  if (v === null) return;
+  const trimmed = v.trim();
+  if (!trimmed) {
+    if (current && confirm('Vymazat současný token z prohlížeče?')) {
+      clearToken();
+      setSyncStatus('Token vymazán', 'error');
+      setControlsEnabled(false);
+    }
+    return;
+  }
+  setToken(trimmed);
+  init();
+}
+
+// ===== GitHub API =====
+async function gh(path, opts = {}) {
+  const token = getToken();
+  if (!token) { const e = new Error('NO_TOKEN'); e.code = 'NO_TOKEN'; throw e; }
+  const res = await fetch(`https://api.github.com/repos/${DATA_OWNER}/${DATA_REPO}/${path}`, {
+    ...opts,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const err = new Error(`API ${res.status}: ${text}`);
+    err.status = res.status;
+    throw err;
+  }
+  if (res.status === 204) return null;
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('json') ? res.json() : res.text();
+}
+
+function utf8ToB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function b64ToUtf8(b64) {
+  const bin = atob((b64 || '').replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function listRosters() {
+  try {
+    const items = await gh(`contents/${ROSTERS_PATH}`);
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter((i) => i.type === 'file' && i.name.toLowerCase().endsWith('.json'))
+      .map((i) => ({
+        name: i.name.replace(/\.json$/i, ''),
+        filename: i.name,
+        sha: i.sha,
+      }));
+  } catch (err) {
+    if (err.status === 404) return [];
+    throw err;
+  }
+}
+
+async function readRosterFile(filename) {
+  const item = await gh(`contents/${ROSTERS_PATH}/${encodeURIComponent(filename)}`);
+  const text = b64ToUtf8(item.content || '');
+  const data = text.trim() ? JSON.parse(text) : [];
+  return { players: Array.isArray(data) ? data : [], sha: item.sha };
+}
+
+async function writeRosterFile(filename, playersToSave, sha) {
+  const text = JSON.stringify(playersToSave, null, 2);
+  const body = { message: `Update ${filename}`, content: utf8ToB64(text) };
+  if (sha) body.sha = sha;
+  const result = await gh(`contents/${ROSTERS_PATH}/${encodeURIComponent(filename)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return result.content.sha;
+}
+
+async function deleteRosterFile(filename, sha) {
+  await gh(`contents/${ROSTERS_PATH}/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: `Delete ${filename}`, sha }),
+  });
+}
+
+// ===== Roster management =====
+function safeFilename(raw) {
+  const name = raw.trim().replace(/\.json$/i, '').replace(/[\\/]/g, '-').replace(/\s+/g, '-');
+  return name + '.json';
+}
+
+function populateRosterSelect() {
+  rosterSelect.innerHTML = '';
+  for (const r of rosters) {
+    const opt = document.createElement('option');
+    opt.value = r.filename;
+    opt.textContent = r.name;
+    if (activeRoster && r.filename === activeRoster.filename) opt.selected = true;
+    rosterSelect.appendChild(opt);
+  }
+}
+
+async function switchRoster(filename) {
+  if (!filename) return;
+  try {
+    setSyncStatus('Načítám…', 'busy');
+    const data = await readRosterFile(filename);
+    players = data.players;
+    const found = rosters.find((r) => r.filename === filename);
+    if (found) {
+      found.sha = data.sha;
+      activeRoster = found;
+    }
+    localStorage.setItem(ACTIVE_ROSTER_KEY, filename);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+    render();
+    setSyncStatus('Načteno', 'connected');
+  } catch (err) {
+    handleApiError(err, 'Načtení selhalo');
+  }
+}
+
+async function createNewRoster() {
+  const suggested = `soupiska-${new Date().toISOString().slice(0, 10)}`;
+  const raw = prompt('Název nové soupisky (zkopíruje aktuální stav):', suggested);
+  if (raw === null) return;
+  if (!raw.trim()) return;
+  const filename = safeFilename(raw);
+  if (rosters.some((r) => r.filename === filename)) {
+    alert('Soupiska s tímto názvem už existuje.');
+    return;
+  }
+  try {
+    setSyncStatus('Vytvářím…', 'busy');
+    const sha = await writeRosterFile(filename, players, null);
+    const entry = { name: filename.replace(/\.json$/i, ''), filename, sha };
+    rosters.push(entry);
+    rosters.sort((a, b) => a.name.localeCompare(b.name));
+    activeRoster = entry;
+    localStorage.setItem(ACTIVE_ROSTER_KEY, filename);
+    populateRosterSelect();
+    setSyncStatus('Vytvořeno ✓', 'connected');
+  } catch (err) {
+    handleApiError(err, 'Vytvoření selhalo');
+  }
+}
+
+async function renameCurrentRoster() {
+  if (!activeRoster) return;
+  const raw = prompt('Nový název soupisky:', activeRoster.name);
+  if (raw === null) return;
+  if (!raw.trim()) return;
+  const newFilename = safeFilename(raw);
+  if (newFilename === activeRoster.filename) return;
+  if (rosters.some((r) => r.filename === newFilename)) {
+    alert('Soupiska s tímto názvem už existuje.');
+    return;
+  }
+  const oldFilename = activeRoster.filename;
+  const oldSha = activeRoster.sha;
+  try {
+    setSyncStatus('Přejmenovávám…', 'busy');
+    const newSha = await writeRosterFile(newFilename, players, null);
+    await deleteRosterFile(oldFilename, oldSha);
+    rosters = rosters.filter((r) => r.filename !== oldFilename);
+    const entry = { name: newFilename.replace(/\.json$/i, ''), filename: newFilename, sha: newSha };
+    rosters.push(entry);
+    rosters.sort((a, b) => a.name.localeCompare(b.name));
+    activeRoster = entry;
+    localStorage.setItem(ACTIVE_ROSTER_KEY, newFilename);
+    populateRosterSelect();
+    setSyncStatus('Přejmenováno ✓', 'connected');
+  } catch (err) {
+    handleApiError(err, 'Přejmenování selhalo');
+  }
+}
+
+async function deleteCurrentRoster() {
+  if (!activeRoster) return;
+  if (rosters.length <= 1) {
+    alert('Nelze smazat poslední soupisku.');
+    return;
+  }
+  if (!confirm(`Smazat soupisku "${activeRoster.name}" ze serveru? Akce je nevratná.`)) return;
+  const toDelete = activeRoster;
+  try {
+    setSyncStatus('Mažu…', 'busy');
+    await deleteRosterFile(toDelete.filename, toDelete.sha);
+    rosters = rosters.filter((r) => r.filename !== toDelete.filename);
+    const next = rosters[0];
+    activeRoster = next;
+    populateRosterSelect();
+    await switchRoster(next.filename);
+  } catch (err) {
+    handleApiError(err, 'Smazání selhalo');
+  }
+}
+
+// ===== Auto-save =====
+function persist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+  scheduleSync();
+}
+
+function scheduleSync() {
+  if (!getToken() || !activeRoster) return;
+  clearTimeout(saveTimer);
+  setSyncStatus('Změna…', 'busy');
+  saveTimer = setTimeout(syncToGitHub, 800);
+}
+
+async function syncToGitHub() {
+  if (!activeRoster) return;
+  try {
+    setSyncStatus('Ukládám…', 'busy');
+    const sha = await writeRosterFile(activeRoster.filename, players, activeRoster.sha);
+    activeRoster.sha = sha;
+    setSyncStatus('Uloženo ✓', 'connected');
+  } catch (err) {
+    if (err.status === 409) {
+      // Conflict: refresh SHA and retry once
+      try {
+        const fresh = await readRosterFile(activeRoster.filename);
+        activeRoster.sha = fresh.sha;
+        const sha = await writeRosterFile(activeRoster.filename, players, fresh.sha);
+        activeRoster.sha = sha;
+        setSyncStatus('Uloženo ✓ (po konfliktu)', 'connected');
+        return;
+      } catch (err2) {
+        handleApiError(err2, 'Konflikt při ukládání');
+        return;
+      }
+    }
+    handleApiError(err, 'Ukládání selhalo');
+  }
+}
+
+function handleApiError(err, prefix) {
+  console.error(prefix, err);
+  if (err.code === 'NO_TOKEN') {
+    setSyncStatus('Token nenastaven', 'error');
+    return;
+  }
+  if (err.status === 401 || err.status === 403) {
+    setSyncStatus('Token neplatný (klikni Nastavení)', 'error');
+    return;
+  }
+  if (err.status === 404) {
+    setSyncStatus(`${prefix}: soubor neexistuje`, 'error');
+    return;
+  }
+  const short = (err.message || '').slice(0, 80);
+  setSyncStatus(`${prefix}: ${short}`, 'error');
+}
+
+function setSyncStatus(text, cls = '') {
+  syncStatus.textContent = text;
+  syncStatus.className = 'sync-status' + (cls ? ' ' + cls : '');
+}
+
+function setControlsEnabled(enabled) {
+  rosterSelect.disabled = !enabled;
+  newRosterBtn.disabled = !enabled;
+  renameRosterBtn.disabled = !enabled;
+  deleteRosterBtn.disabled = !enabled;
+}
+
+// ===== Init =====
+async function init() {
+  if (!getToken()) {
+    setSyncStatus('Token nenastaven – klikni "Nastavení"', 'error');
+    setControlsEnabled(false);
+    rosterSelect.innerHTML = '<option value="">(offline)</option>';
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      players = raw ? JSON.parse(raw) : [];
+    } catch { players = []; }
+    render();
+    return;
+  }
+  setControlsEnabled(true);
+  try {
+    setSyncStatus('Načítám seznam…', 'busy');
+    rosters = await listRosters();
+    if (rosters.length === 0) {
+      // No rosters yet — create a default one with current local players (if any)
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      const localPlayers = (() => { try { return localRaw ? JSON.parse(localRaw) : []; } catch { return []; } })();
+      const sha = await writeRosterFile('default.json', localPlayers, null);
+      rosters = [{ name: 'default', filename: 'default.json', sha }];
+    }
+    rosters.sort((a, b) => a.name.localeCompare(b.name));
+    const lastFile = localStorage.getItem(ACTIVE_ROSTER_KEY);
+    const target = rosters.find((r) => r.filename === lastFile) || rosters[0];
+    activeRoster = target;
+    populateRosterSelect();
+    await switchRoster(target.filename);
+  } catch (err) {
+    handleApiError(err, 'Inicializace selhala');
+  }
+}
+
+// ===== Player actions =====
 function addPlayerFromInput() {
   const name = nameInput.value.trim();
   if (!name) return;
@@ -56,26 +381,35 @@ function addPlayerFromInput() {
   nameInput.focus();
 }
 
-// ---------- Persistence ----------
-
-function loadFromLocalStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function clearAll() {
+  if (!confirm('Opravdu chcete trvale smazat VŠECHNY hráče v této soupisce? Tato akce je nevratná.')) return;
+  players = [];
+  persist();
+  render();
 }
 
-function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+function resetRoster() {
+  const affected = players.filter((p) => p.team === 'A' || p.team === 'B').length;
+  if (affected === 0) {
+    alert('V týmech A a B nejsou žádní hráči k resetu.');
+    return;
+  }
+  if (!confirm(`Resetovat soupisku? ${affected} hráč(ů) z týmů A a B se přesune do Nepřiřazení. Nerozhodnutí zůstanou. Pokračovat?`)) return;
+  for (const p of players) {
+    if (p.team === 'A' || p.team === 'B') {
+      p.team = 'UNASSIGNED';
+      p.role = 'None';
+    }
+  }
+  persist();
+  render();
 }
 
 function downloadJSON() {
   const stamp = new Date().toISOString().slice(0, 10);
-  const suggested = `soupiska-${stamp}`;
+  const suggested = activeRoster ? `${activeRoster.name}-${stamp}` : `soupiska-${stamp}`;
   const input = prompt('Název souboru soupisky:', suggested);
-  if (input === null) return; // cancelled
+  if (input === null) return;
   const trimmed = input.trim() || suggested;
   const filename = trimmed.toLowerCase().endsWith('.json') ? trimmed : trimmed + '.json';
 
@@ -98,7 +432,6 @@ function handleFileLoad(e) {
     try {
       const parsed = JSON.parse(reader.result);
       if (!Array.isArray(parsed)) throw new Error('JSON není pole hráčů.');
-      // Light sanity check on shape
       for (const p of parsed) {
         if (typeof p.name !== 'string' || typeof p.team !== 'string' || typeof p.role !== 'string') {
           throw new Error('Neplatný formát hráče.');
@@ -113,16 +446,12 @@ function handleFileLoad(e) {
     }
   };
   reader.readAsText(file);
-  // Reset input so the same file can be re-selected later
   e.target.value = '';
 }
 
-// ---------- Rendering ----------
-
+// ===== Rendering =====
 function render() {
-  document.querySelectorAll('.drop-list').forEach((list) => {
-    list.innerHTML = '';
-  });
+  document.querySelectorAll('.drop-list').forEach((list) => { list.innerHTML = ''; });
 
   for (const player of players) {
     const selector = `.drop-list[data-team="${player.team}"][data-role="${player.role}"]`;
@@ -218,8 +547,6 @@ function makeCard(player) {
   card.addEventListener('dragend', () => {
     card.classList.remove('dragging');
     document.querySelectorAll('.role-zone.over').forEach((z) => z.classList.remove('over'));
-    // If drop didn't fire on a valid zone, re-render to revert the DOM
-    // from the dragover preview back to the persisted array order.
     render();
   });
 
@@ -232,9 +559,7 @@ function getDragAfterElement(list, y) {
     (closest, child) => {
       const box = child.getBoundingClientRect();
       const offset = y - box.top - box.height / 2;
-      if (offset < 0 && offset > closest.offset) {
-        return { offset, element: child };
-      }
+      if (offset < 0 && offset > closest.offset) return { offset, element: child };
       return closest;
     },
     { offset: Number.NEGATIVE_INFINITY, element: null }
@@ -287,4 +612,4 @@ function setupDropZones() {
 }
 
 setupDropZones();
-render();
+init();

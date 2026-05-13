@@ -9,10 +9,21 @@
   <header class="topbar">
     <h1>Soupiska – Podvodní Rugby</h1>
     <div class="controls">
+      <label class="roster-select">
+        Soupiska:
+        <select id="rosterSelect"><option value="">(načítám…)</option></select>
+      </label>
+      <button id="newRosterBtn" title="Vytvořit novou soupisku jako kopii aktuální">+ Nová soupiska</button>
+      <button id="renameRosterBtn" title="Přejmenovat aktuální soupisku">Přejmenovat</button>
+      <button id="deleteRosterBtn" class="danger" title="Smazat aktuální soupisku ze serveru">Smazat soupisku</button>
+      <span id="syncStatus" class="sync-status">…</span>
+      <button id="configBtn" title="Nastavit / vymazat GitHub token">Nastavení</button>
+    </div>
+    <div class="controls">
       <input id="newPlayerName" type="text" placeholder="Jméno hráče" />
       <button id="addPlayerBtn">Přidat hráče</button>
-      <button id="downloadBtn" title="Stáhnout aktuální soupisku">Stáhnout soupisku</button>
-      <button id="loadBtn" title="Načíst soupisku ze souboru">Načíst soupisku</button>
+      <button id="downloadBtn" title="Stáhnout aktuální soupisku jako JSON soubor">Stáhnout soupisku</button>
+      <button id="loadBtn" title="Načíst soupisku ze souboru (nahradí aktuální)">Načíst soupisku</button>
       <input id="loadFileInput" type="file" accept="application/json,.json" hidden />
       <button id="resetBtn" class="warn" title="Přesune všechny hráče z týmu A a B do Nepřiřazení">Resetovat soupisku</button>
       <button id="clearAllBtn" class="danger">Smazat vše</button>

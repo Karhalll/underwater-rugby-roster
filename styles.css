@@ -9,9 +9,9 @@ body {
 
 .topbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px;
   background: #1e293b;
   border-bottom: 1px solid #334155;
 }
@@ -24,9 +24,11 @@ body {
 .controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.controls input {
+.controls input[type="text"] {
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid #475569;
@@ -46,27 +48,45 @@ body {
 }
 
 .controls button:hover { background: #1d4ed8; }
+.controls button:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
 .controls button.danger { background: #b91c1c; }
 .controls button.danger:hover { background: #991b1b; }
 .controls button.warn { background: #d97706; }
 .controls button.warn:hover { background: #b45309; }
 
-.file-status {
-  font-size: 0.85rem;
-  color: #94a3b8;
-  align-self: center;
-  padding: 0 4px;
+.roster-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #cbd5e1;
 }
 
-.file-status.connected { color: #4ade80; }
-.file-status.error { color: #f87171; }
+.roster-select select {
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  min-width: 160px;
+}
+
+.sync-status {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  padding: 0 6px;
+}
+.sync-status.connected { color: #4ade80; }
+.sync-status.error { color: #f87171; }
+.sync-status.busy { color: #facc15; }
 
 .board {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
   padding: 12px;
-  height: calc(100vh - 60px);
+  height: calc(100vh - 110px);
 }
 
 .team {
