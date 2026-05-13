@@ -30,6 +30,8 @@ const deleteRosterBtn = document.getElementById('deleteRosterBtn');
 const syncStatus = document.getElementById('syncStatus');
 const configBtn = document.getElementById('configBtn');
 const toastEl = document.getElementById('toast');
+const menuToggle = document.getElementById('menuToggle');
+const topbarEl = document.getElementById('topbar');
 
 // ===== Event wiring =====
 addBtn.addEventListener('click', addPlayerFromInput);
@@ -44,6 +46,10 @@ newRosterBtn.addEventListener('click', createNewRoster);
 renameRosterBtn.addEventListener('click', renameCurrentRoster);
 deleteRosterBtn.addEventListener('click', deleteCurrentRoster);
 configBtn.addEventListener('click', openConfig);
+menuToggle.addEventListener('click', () => {
+  const expanded = topbarEl.classList.toggle('expanded');
+  menuToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+});
 
 // ===== Token / Config =====
 function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
@@ -653,6 +659,7 @@ function makeCard(player) {
   removeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
   removeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (!confirm(`Odstranit hráče „${player.name}"?`)) return;
     players = players.filter((p) => p.id !== player.id);
     persist();
     render();

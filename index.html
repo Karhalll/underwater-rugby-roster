@@ -7,20 +7,25 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>Soupiska – Podvodní Rugby</h1>
-    <div class="controls">
+  <header class="topbar" id="topbar">
+    <div class="topbar-line">
+      <h1 class="app-title">Soupiska – Podvodní Rugby</h1>
       <label class="roster-select">
         Soupiska:
         <select id="rosterSelect"><option value="">(načítám…)</option></select>
       </label>
+      <button id="menuToggle" class="menu-toggle" aria-label="Zobrazit menu" aria-expanded="false">
+        <span class="menu-chevron">▾</span>
+      </button>
+    </div>
+    <div class="controls collapsible">
       <button id="newRosterBtn" title="Vytvořit novou soupisku jako kopii aktuální">+ Nová soupiska</button>
       <button id="renameRosterBtn" title="Přejmenovat aktuální soupisku">Přejmenovat</button>
       <button id="deleteRosterBtn" class="danger" title="Smazat aktuální soupisku ze serveru">Smazat soupisku</button>
       <span id="syncStatus" class="sync-status">Odhlášen</span>
       <button id="configBtn" title="Přihlásit se přístupovým tokenem k databázi soupisek">Přihlásit se</button>
     </div>
-    <div class="controls">
+    <div class="controls collapsible">
       <input id="newPlayerName" type="text" placeholder="Jméno hráče" />
       <button id="addPlayerBtn">Přidat hráče</button>
       <button id="downloadBtn" title="Stáhnout aktuální soupisku jako JSON soubor">Stáhnout soupisku</button>
