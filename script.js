@@ -673,7 +673,112 @@ function makeCard(player) {
     render();
   });
 
+  attachTouchDrag(card, player);
+
   return card;
+}
+
+// ===== Touch drag-and-drop (mobile) =====
+function attachTouchDrag(card, player) {
+  let touchStart = null;
+  let longPressTimer = null;
+  let dragActive = false;
+  let ghost = null;
+  let currentZone = null;
+
+  card.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.target;
+    if (t.closest('.edit, .remove')) return;
+    if (t.matches('.name') && t.contentEditable === 'true') return;
+    const touch = e.touches[0];
+    touchStart = { x: touch.clientX, y: touch.clientY };
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      beginDrag(touch);
+    }, 220);
+  }, { passive: true });
+
+  card.addEventListener('touchmove', (e) => {
+    if (longPressTimer && touchStart) {
+      const t = e.touches[0];
+      if (Math.hypot(t.clientX - touchStart.x, t.clientY - touchStart.y) > 10) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        touchStart = null;
+      }
+    }
+  }, { passive: true });
+
+  card.addEventListener('touchend', () => {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    touchStart = null;
+  });
+
+  function beginDrag(touch) {
+    dragActive = true;
+    card.classList.add('dragging');
+    if (navigator.vibrate) try { navigator.vibrate(20); } catch {}
+    const rect = card.getBoundingClientRect();
+    ghost = card.cloneNode(true);
+    ghost.classList.remove('dragging');
+    ghost.classList.add('drag-ghost');
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.width = rect.width + 'px';
+    document.body.appendChild(ghost);
+    document.addEventListener('touchmove', onDocMove, { passive: false });
+    document.addEventListener('touchend', onDocEnd);
+    document.addEventListener('touchcancel', onDocEnd);
+    moveGhostTo(touch);
+  }
+
+  function moveGhostTo(touch) {
+    if (!ghost) return;
+    ghost.style.left = (touch.clientX - ghost.offsetWidth / 2) + 'px';
+    ghost.style.top = (touch.clientY - ghost.offsetHeight / 2) + 'px';
+    ghost.style.display = 'none';
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    ghost.style.display = '';
+    document.querySelectorAll('.role-zone.over').forEach((z) => z.classList.remove('over'));
+    const zone = el ? el.closest('.role-zone') : null;
+    if (!zone) { currentZone = null; return; }
+    zone.classList.add('over');
+    currentZone = zone;
+    const list = zone.querySelector('.drop-list');
+    const afterEl = getDragAfterElement(list, touch.clientY);
+    if (afterEl == null) {
+      if (list.lastElementChild !== card) list.appendChild(card);
+    } else if (afterEl !== card) {
+      list.insertBefore(card, afterEl);
+    }
+  }
+
+  function onDocMove(e) {
+    if (!dragActive) return;
+    e.preventDefault();
+    moveGhostTo(e.touches[0]);
+  }
+
+  function onDocEnd() {
+    if (!dragActive) return;
+    dragActive = false;
+    card.classList.remove('dragging');
+    document.querySelectorAll('.role-zone.over').forEach((z) => z.classList.remove('over'));
+    if (ghost) { ghost.remove(); ghost = null; }
+    document.removeEventListener('touchmove', onDocMove);
+    document.removeEventListener('touchend', onDocEnd);
+    document.removeEventListener('touchcancel', onDocEnd);
+    if (currentZone) {
+      const list = currentZone.querySelector('.drop-list');
+      player.team = list.dataset.team;
+      player.role = list.dataset.role;
+      syncOrderFromDOM();
+      persist();
+    }
+    currentZone = null;
+    render();
+  }
 }
 
 function getDragAfterElement(list, y) {

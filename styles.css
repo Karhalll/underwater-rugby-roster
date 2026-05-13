@@ -5,6 +5,9 @@ body {
   font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   background: #0f172a;
   color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .topbar {
@@ -14,6 +17,7 @@ body {
   padding: 10px 16px;
   background: #1e293b;
   border-bottom: 1px solid #334155;
+  flex: 0 0 auto;
 }
 
 .topbar h1 {
@@ -86,7 +90,8 @@ body {
   grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
   padding: 12px;
-  height: calc(100vh - 110px);
+  flex: 1;
+  min-height: 0;
 }
 
 .team {
@@ -168,6 +173,9 @@ body {
   align-items: center;
   border-left: 4px solid #64748b;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 .player-card:active { cursor: grabbing; }
@@ -234,3 +242,61 @@ body {
 
 .toast.error { border-left-color: #f87171; }
 .toast.warn { border-left-color: #facc15; }
+
+/* Ghost shown while dragging on touch devices */
+.drag-ghost {
+  position: fixed;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  transform: scale(1.04);
+  opacity: 0.95;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* Mobile tweaks: tighter spacing so 3 columns still fit comfortably */
+@media (max-width: 768px) {
+  .topbar {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+  .topbar h1 { font-size: 1rem; }
+  .controls { gap: 6px; }
+  .controls input[type="text"] {
+    min-width: 130px;
+    font-size: 16px; /* prevent iOS auto-zoom on focus */
+    padding: 5px 8px;
+  }
+  .controls button {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+  .roster-select { font-size: 0.85rem; gap: 4px; }
+  .roster-select select {
+    min-width: 120px;
+    padding: 5px 6px;
+    font-size: 0.9rem;
+  }
+  .sync-status { font-size: 0.75rem; padding: 0 2px; }
+  .board {
+    padding: 6px;
+    gap: 6px;
+  }
+  .team { padding: 6px; gap: 6px; border-radius: 8px; }
+  .team h2 { font-size: 0.95rem; padding-bottom: 4px; }
+  .role-zone { padding: 5px; border-radius: 6px; }
+  .role-zone h3 {
+    font-size: 0.7rem;
+    letter-spacing: 0.3px;
+    margin: 0 0 4px;
+  }
+  .role-zone h3 .count { font-size: 0.7rem; }
+  .drop-list { gap: 4px; }
+  .player-card {
+    padding: 6px 7px;
+    font-size: 0.85rem;
+    border-left-width: 3px;
+  }
+  .player-card .edit { font-size: 0.85rem; padding: 2px 5px; }
+  .player-card .remove { font-size: 1rem; padding: 2px 5px; }
+  .toast { right: 8px; bottom: 8px; font-size: 0.8rem; padding: 8px 10px; max-width: 280px; }
+}
