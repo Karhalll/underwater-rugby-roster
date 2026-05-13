@@ -5,12 +5,15 @@ const ROSTERS_PATH = 'rosters';
 const STORAGE_KEY = 'urugby_roster_v1';
 const TOKEN_KEY = 'urugby_gh_token';
 const ACTIVE_ROSTER_KEY = 'urugby_active_roster';
+const POLL_INTERVAL_MS = 10000;
 
 // ===== State =====
 let players = [];
 let activeRoster = null; // { name, filename, sha }
 let rosters = [];        // [{ name, filename, sha }]
 let saveTimer = null;
+let pollTimer = null;
+let toastTimer = null;
 
 // ===== DOM =====
 const nameInput = document.getElementById('newPlayerName');
@@ -26,6 +29,7 @@ const renameRosterBtn = document.getElementById('renameRosterBtn');
 const deleteRosterBtn = document.getElementById('deleteRosterBtn');
 const syncStatus = document.getElementById('syncStatus');
 const configBtn = document.getElementById('configBtn');
+const toastEl = document.getElementById('toast');
 
 // ===== Event wiring =====
 addBtn.addEventListener('click', addPlayerFromInput);
@@ -51,6 +55,7 @@ function openConfig() {
   if (current) {
     if (confirm('Odhlásit se z databáze soupisek? Token bude odstraněn z tohoto prohlížeče. Pro další přihlášení ho budeš muset znovu vložit.')) {
       clearTimeout(saveTimer);
+      stopPolling();
       clearToken();
       players = [];
       activeRoster = null;
@@ -349,9 +354,77 @@ function setControlsEnabled(enabled) {
   deleteRosterBtn.disabled = !enabled;
 }
 
+function showToast(message, type = 'info') {
+  toastEl.textContent = message;
+  toastEl.classList.remove('error', 'warn');
+  if (type === 'error') toastEl.classList.add('error');
+  else if (type === 'warn') toastEl.classList.add('warn');
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 4500);
+}
+
+// ===== Polling for remote changes =====
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(pollForChanges, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+function isUserBusy() {
+  if (document.querySelector('.player-card.dragging')) return true;
+  if (document.querySelector('.player-card .name[contenteditable="true"]')) return true;
+  return false;
+}
+
+async function pollForChanges() {
+  if (!getToken() || !activeRoster) return;
+  if (saveTimer) return; // a local save is queued — let it finish first
+  if (isUserBusy()) return;
+  try {
+    const fresh = await readRosterFile(activeRoster.filename);
+    if (fresh.sha === activeRoster.sha) return;
+    players = fresh.players;
+    activeRoster.sha = fresh.sha;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+    render();
+    showToast('Soupiska byla aktualizována ze serveru.');
+  } catch (err) {
+    if (err.status === 404) {
+      showToast('Tato soupiska byla na serveru smazána. Načítám seznam…', 'warn');
+      stopPolling();
+      try { rosters = await listRosters(); } catch {}
+      if (rosters.length > 0) {
+        activeRoster = rosters[0];
+        populateRosterSelect();
+        await switchRoster(rosters[0].filename);
+        startPolling();
+      } else {
+        activeRoster = null;
+        populateRosterSelect();
+        players = [];
+        render();
+      }
+      return;
+    }
+    if (err.status === 401 || err.status === 403) {
+      stopPolling();
+      handleApiError(err, 'Poll selhal');
+      return;
+    }
+    // Network blip — keep polling, don't disturb user.
+    console.warn('Poll failed:', err);
+  }
+}
+
 // ===== Init =====
 async function init() {
   updateAuthButton();
+  stopPolling();
   if (!getToken()) {
     setSyncStatus('Odhlášen – klikni "Přihlásit se"', 'error');
     setControlsEnabled(false);
@@ -380,6 +453,7 @@ async function init() {
     activeRoster = target;
     populateRosterSelect();
     await switchRoster(target.filename);
+    startPolling();
   } catch (err) {
     handleApiError(err, 'Inicializace selhala');
   }

@@ -207,3 +207,30 @@ body {
 
 .player-card .edit:hover { color: #38bdf8; }
 .player-card .remove:hover { color: #ef4444; }
+
+.toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  padding: 10px 14px;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  border-left: 4px solid #4ade80;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  max-width: 360px;
+  font-size: 0.9rem;
+  z-index: 1000;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.error { border-left-color: #f87171; }
+.toast.warn { border-left-color: #facc15; }
