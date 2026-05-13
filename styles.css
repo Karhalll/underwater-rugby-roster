@@ -1,0 +1,189 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+}
+
+.controls input {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #e2e8f0;
+  min-width: 200px;
+}
+
+.controls button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.controls button:hover { background: #1d4ed8; }
+.controls button.danger { background: #b91c1c; }
+.controls button.danger:hover { background: #991b1b; }
+.controls button.warn { background: #d97706; }
+.controls button.warn:hover { background: #b45309; }
+
+.file-status {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  align-self: center;
+  padding: 0 4px;
+}
+
+.file-status.connected { color: #4ade80; }
+.file-status.error { color: #f87171; }
+
+.board {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+  height: calc(100vh - 60px);
+}
+
+.team {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #1e293b;
+  border-radius: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.team h2 {
+  margin: 0 0 4px;
+  text-align: center;
+  font-size: 1.1rem;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #334155;
+}
+
+.team-a h2 { color: #60a5fa; }
+.team-b h2 { color: #f87171; }
+.team-middle h2 { color: #facc15; }
+
+.role-zone {
+  background: #0f172a;
+  border: 1px dashed #334155;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.role-zone.middle-zone.undecided {
+  border-color: #6b7280;
+  background: #1f2937;
+}
+
+.role-zone h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.role-zone h3 .count {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  font-weight: normal;
+}
+
+.role-zone.over {
+  border-color: #38bdf8;
+  background: #082f49;
+}
+
+.drop-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.player-card {
+  background: #334155;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: grab;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 4px solid #64748b;
+  user-select: none;
+}
+
+.player-card:active { cursor: grabbing; }
+.player-card.dragging { opacity: 0.4; }
+
+.team-a .player-card { border-left-color: #3b82f6; }
+.team-b .player-card { border-left-color: #ef4444; }
+.role-zone.middle-zone .player-card { border-left-color: #facc15; }
+.role-zone.middle-zone.undecided .player-card { border-left-color: #6b7280; }
+
+.player-card .name {
+  font-weight: 500;
+  padding: 2px 4px;
+  border-radius: 4px;
+  outline: none;
+  flex: 1;
+}
+
+.player-card .name[contenteditable="true"] {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 1px #38bdf8;
+  cursor: text;
+}
+
+.player-card .edit,
+.player-card .remove {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.player-card .edit { font-size: 0.95rem; }
+.player-card .remove { font-size: 1.1rem; }
+
+.player-card .edit:hover { color: #38bdf8; }
+.player-card .remove:hover { color: #ef4444; }

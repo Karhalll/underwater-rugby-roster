@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <title>Soupiska – Podvodní Rugby</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Soupiska – Podvodní Rugby</h1>
+    <div class="controls">
+      <input id="newPlayerName" type="text" placeholder="Jméno hráče" />
+      <button id="addPlayerBtn">Přidat hráče</button>
+      <button id="downloadBtn" title="Stáhnout aktuální soupisku">Stáhnout soupisku</button>
+      <button id="loadBtn" title="Načíst soupisku ze souboru">Načíst soupisku</button>
+      <input id="loadFileInput" type="file" accept="application/json,.json" hidden />
+      <button id="resetBtn" class="warn" title="Přesune všechny hráče z týmu A a B do Nepřiřazení">Resetovat soupisku</button>
+      <button id="clearAllBtn" class="danger">Smazat vše</button>
+    </div>
+  </header>
+
+  <main class="board">
+    <!-- Tým A -->
+    <section class="team team-a">
+      <h2>Tým A</h2>
+      <div class="role-zone" data-team="A" data-role="Goalkeeper">
+        <h3>Brankář <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="A" data-role="Goalkeeper"></div>
+      </div>
+      <div class="role-zone" data-team="A" data-role="Defender">
+        <h3>Obránce <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="A" data-role="Defender"></div>
+      </div>
+      <div class="role-zone" data-team="A" data-role="Attacker">
+        <h3>Útočník <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="A" data-role="Attacker"></div>
+      </div>
+    </section>
+
+    <!-- Střed -->
+    <section class="team team-middle">
+      <h2>Skupina</h2>
+      <div class="role-zone middle-zone" data-team="UNASSIGNED" data-role="None">
+        <h3>Nepřiřazení <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="UNASSIGNED" data-role="None"></div>
+      </div>
+      <div class="role-zone middle-zone undecided" data-team="UNDECIDED" data-role="None">
+        <h3>Nerozhodnutí <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="UNDECIDED" data-role="None"></div>
+      </div>
+    </section>
+
+    <!-- Tým B -->
+    <section class="team team-b">
+      <h2>Tým B</h2>
+      <div class="role-zone" data-team="B" data-role="Goalkeeper">
+        <h3>Brankář <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="B" data-role="Goalkeeper"></div>
+      </div>
+      <div class="role-zone" data-team="B" data-role="Defender">
+        <h3>Obránce <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="B" data-role="Defender"></div>
+      </div>
+      <div class="role-zone" data-team="B" data-role="Attacker">
+        <h3>Útočník <span class="count">(0)</span></h3>
+        <div class="drop-list" data-team="B" data-role="Attacker"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
