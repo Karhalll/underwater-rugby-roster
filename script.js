@@ -14,6 +14,7 @@ let rosters = [];        // [{ name, filename, sha }]
 let saveTimer = null;
 let pollTimer = null;
 let toastTimer = null;
+let selectedPlayerId = null;
 
 // ===== DOM =====
 const nameInput = document.getElementById('newPlayerName');
@@ -593,7 +594,25 @@ function render() {
     const countEl = zone.querySelector('.count');
     if (countEl) countEl.textContent = `(${list.children.length})`;
   });
+
+  applySelection();
 }
+
+function applySelection() {
+  document.querySelectorAll('.player-card.selected').forEach((c) => c.classList.remove('selected'));
+  if (!selectedPlayerId) return;
+  const card = document.querySelector(`.player-card[data-id="${selectedPlayerId}"]`);
+  if (card) card.classList.add('selected');
+  else selectedPlayerId = null;
+}
+
+// Tapping outside any player card deselects.
+document.addEventListener('click', (e) => {
+  if (!selectedPlayerId) return;
+  if (e.target.closest('.player-card')) return;
+  selectedPlayerId = null;
+  applySelection();
+});
 
 function makeCard(player) {
   const card = document.createElement('div');
@@ -690,6 +709,7 @@ function attachTouchDrag(card, player) {
   let touchStart = null;
   let longPressTimer = null;
   let dragActive = false;
+  let wasTap = false;
   let ghost = null;
   let currentZone = null;
 
@@ -700,8 +720,10 @@ function attachTouchDrag(card, player) {
     if (t.matches('.name') && t.contentEditable === 'true') return;
     const touch = e.touches[0];
     touchStart = { x: touch.clientX, y: touch.clientY };
+    wasTap = true;
     longPressTimer = setTimeout(() => {
       longPressTimer = null;
+      wasTap = false;
       beginDrag(touch);
     }, 220);
   }, { passive: true });
@@ -713,12 +735,19 @@ function attachTouchDrag(card, player) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
         touchStart = null;
+        wasTap = false;
       }
     }
   }, { passive: true });
 
   card.addEventListener('touchend', () => {
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    if (wasTap && !dragActive) {
+      const id = card.dataset.id;
+      selectedPlayerId = selectedPlayerId === id ? null : id;
+      applySelection();
+    }
+    wasTap = false;
     touchStart = null;
   });
 

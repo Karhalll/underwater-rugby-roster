@@ -333,7 +333,20 @@ body {
     gap: 2px;
   }
   .player-card .name { padding: 1px 2px; }
-  .player-card .edit { font-size: 0.8rem; padding: 0 4px; }
-  .player-card .remove { font-size: 0.95rem; padding: 0 4px; }
+  /* Mobile: hide edit/remove until the card is tapped, so names have room. */
+  .player-card .edit,
+  .player-card .remove {
+    display: none;
+  }
+  .player-card.selected .edit,
+  .player-card.selected .remove {
+    display: inline-flex;
+  }
+  .player-card.selected {
+    background: #475569;
+    box-shadow: inset 0 0 0 1px #38bdf8;
+  }
+  .player-card .edit { font-size: 0.85rem; padding: 0 6px; }
+  .player-card .remove { font-size: 1rem; padding: 0 6px; }
   .toast { right: 8px; bottom: 8px; font-size: 0.8rem; padding: 8px 10px; max-width: 280px; }
 }
